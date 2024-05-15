@@ -23,6 +23,7 @@
 BOOL useAPL = false;
 BOOL closeThreads = false;
 const int scale = 40;
+const int spherePoints = 1000;
 
 // Define the window title
 const wchar_t g_szClassName[] = L"myWindowClass";
@@ -53,30 +54,71 @@ std::vector<double> rotationInX = {
     sin(M_PI / 2),  cos(M_PI / 2), 0
 };
 
+//// Define a cube by its vertices
+//std::vector<Point3D> cubeVertices = {
+//    {1 * scale, 1 * scale, 1 * scale}, {-1 * scale, 1 * scale, 1 * scale}, {-1* scale, -1 * scale, 1 * scale}, {1 * scale, -1 * scale, 1 * scale},
+//    {1 * scale, 1 * scale, -1 * scale}, {-1 * scale, 1 * scale, -1 * scale}, {-1 * scale, -1 * scale, -1 * scale}, {1 * scale, -1 * scale, -1 * scale}
+//};
+
 // Define a cube by its vertices
-std::vector<Point3D> cubeVertices = {
-    {1 * scale, 1 * scale, 1 * scale}, {-1 * scale, 1 * scale, 1 * scale}, {-1* scale, -1 * scale, 1 * scale}, {1 * scale, -1 * scale, 1 * scale},
-    {1 * scale, 1 * scale, -1 * scale}, {-1 * scale, 1 * scale, -1 * scale}, {-1 * scale, -1 * scale, -1 * scale}, {1 * scale, -1 * scale, -1 * scale}
+std::vector<double> cubeVertices = {
+    1 * scale, 1 * scale, 1 * scale, -1 * scale, 1 * scale, 1 * scale, -1 * scale, -1 * scale, 1 * scale, 1 * scale, -1 * scale, 1 * scale,
+    1 * scale, 1 * scale, -1 * scale, -1 * scale, 1 * scale, -1 * scale, -1 * scale, -1 * scale, -1 * scale, 1 * scale, -1 * scale, -1 * scale
 };
 
-// Function to apply a rotation matrix to a point
-void applyRotation(std::vector<Point3D> &cube, const std::vector<double>& rotMatrix)
+std::vector<double> sphereVertices;
+
+std::vector<double> generateSpherePoints(int numPoints) 
+{
+    std::vector<double> points;
+    const double goldenRatio = (1 + std::sqrt(5.0)) / 2;
+    const double angleIncrement = M_PI * 2 * goldenRatio;
+
+    for (int i = 0; i < numPoints; ++i) 
+    {
+        double t = (double)i / numPoints;
+        double inclination = std::acos(1 - 2 * t);
+        double azimuth = angleIncrement * i;
+
+        double x = std::sin(inclination) * std::cos(azimuth);
+        double y = std::sin(inclination) * std::sin(azimuth);
+        double z = std::cos(inclination);
+
+        points.push_back(x);
+        points.push_back(y);
+        points.push_back(z);
+    }
+
+    return points;
+}
+
+
+// Function to apply a rotation matrix to a matrix of 3D points using C operations
+void applyRotation(std::vector<double> &shape, const std::vector<double>& rotMatrix)
 {
     EnterCriticalSection(&cubeDraw);
 
-    auto point = cube.begin();
-    while (point != cube.end())
+    auto point = shape.begin();
+    while (point != shape.end())
     {
+
+        // read three points
+        Point3D startPoint;
+        startPoint.x = *point; point++;
+        startPoint.y = *point; point++;
+        startPoint.z = *point;
+
+        // go back two points
+        point -= 2;
+
         Point3D rotatedPoint;
-        rotatedPoint.x = rotMatrix[0] * (*point).x + rotMatrix[1] * (*point).y + rotMatrix[2] * (*point).z;
-        rotatedPoint.y = rotMatrix[3] * (*point).x + rotMatrix[4] * (*point).y + rotMatrix[5] * (*point).z;
-        rotatedPoint.z = rotMatrix[6] * (*point).x + rotMatrix[7] * (*point).y + rotMatrix[8] * (*point).z;
+        rotatedPoint.x = rotMatrix[0] * startPoint.x + rotMatrix[1] * startPoint.y + rotMatrix[2] * startPoint.z;
+        rotatedPoint.y = rotMatrix[3] * startPoint.x + rotMatrix[4] * startPoint.y + rotMatrix[5] * startPoint.z;
+        rotatedPoint.z = rotMatrix[6] * startPoint.x + rotMatrix[7] * startPoint.y + rotMatrix[8] * startPoint.z;
 
-        (*point).x = rotatedPoint.x;
-        (*point).y = rotatedPoint.y;
-        (*point).z = rotatedPoint.z;
-
-        point++;
+        *point = rotatedPoint.x; point++;
+        *point = rotatedPoint.y; point++;
+        *point = rotatedPoint.z; point++;
     }
 
     Calculations++;
@@ -84,23 +126,15 @@ void applyRotation(std::vector<Point3D> &cube, const std::vector<double>& rotMat
     LeaveCriticalSection(&cubeDraw);
 }
 
-void applyRotationBLAS(std::vector<Point3D>& cube, const std::vector<double>& rotMatrix)
+void applyRotationBLAS(std::vector<double>& shape, const std::vector<double>& rotMatrix)
 {
-    double res[3] = { 0 };
     EnterCriticalSection(&cubeDraw);
+    double * newCubeVertices = new double[shape.size()];
 
-    auto point = cube.begin();
-    while (point != cube.end())
-    {
 #ifdef _M_ARM64
-        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 1, 3, 3, 1.0, (double*)(&(*point).x), 3, rotMatrix.data(), 3, 0.0, res, 3);
-
-        (*point).x = res[0];
-        (*point).y = res[1];
-        (*point).z = res[2];
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, shape.size() / 3, 3, 3, 1.0, shape.data(), 3, rotMatrix.data(), 3, 0.0, newCubeVertices, 3);
+        memcpy(shape.data(),newCubeVertices, shape.size() * sizeof(double));
 #endif
-        point++;
-    }
 
     Calculations++;
 
@@ -128,26 +162,26 @@ void DrawCube(HDC hdc, RECT cliRect)
 
     EnterCriticalSection(&cubeDraw);
     // Draw new
-    MoveToEx(hdc, ( cubeVertices[0].x) + centre.x, ( cubeVertices[0].y) + centre.y, NULL);
-    LineTo(hdc, ( cubeVertices[1].x) + centre.x, ( cubeVertices[1].y) + centre.y);
-    LineTo(hdc, ( cubeVertices[2].x) + centre.x, ( cubeVertices[2].y) + centre.y);
-    LineTo(hdc, ( cubeVertices[3].x) + centre.x, ( cubeVertices[3].y) + centre.y);
-    LineTo(hdc, ( cubeVertices[0].x) + centre.x, ( cubeVertices[0].y) + centre.y);
+    MoveToEx(hdc, cubeVertices[0] + centre.x, cubeVertices[1] + centre.y, NULL);
+    LineTo(hdc, ( cubeVertices[3]) + centre.x, ( cubeVertices[4]) + centre.y);
+    LineTo(hdc, ( cubeVertices[6]) + centre.x, ( cubeVertices[7]) + centre.y);
+    LineTo(hdc, ( cubeVertices[9]) + centre.x, ( cubeVertices[10]) + centre.y);
+    LineTo(hdc, ( cubeVertices[0]) + centre.x, ( cubeVertices[1]) + centre.y);
 
-    MoveToEx(hdc, ( cubeVertices[4].x) + centre.x, ( cubeVertices[4].y) + centre.y, NULL);
-    LineTo(hdc, ( cubeVertices[5].x) + centre.x, ( cubeVertices[5].y) + centre.y);
-    LineTo(hdc, ( cubeVertices[6].x) + centre.x, ( cubeVertices[6].y) + centre.y);
-    LineTo(hdc, ( cubeVertices[7].x) + centre.x, ( cubeVertices[7].y) + centre.y);
-    LineTo(hdc, ( cubeVertices[4].x) + centre.x, ( cubeVertices[4].y) + centre.y);
+    MoveToEx(hdc, ( cubeVertices[12]) + centre.x, ( cubeVertices[13]) + centre.y, NULL);
+    LineTo(hdc, ( cubeVertices[15]) + centre.x, ( cubeVertices[16]) + centre.y);
+    LineTo(hdc, ( cubeVertices[18]) + centre.x, ( cubeVertices[19]) + centre.y);
+    LineTo(hdc, ( cubeVertices[21]) + centre.x, ( cubeVertices[22]) + centre.y);
+    LineTo(hdc, ( cubeVertices[12]) + centre.x, ( cubeVertices[13]) + centre.y);
 
-    MoveToEx(hdc, ( cubeVertices[0].x) + centre.x, ( cubeVertices[0].y) + centre.y, NULL);
-    LineTo(hdc, ( cubeVertices[4].x) + centre.x, ( cubeVertices[4].y) + centre.y);
-    MoveToEx(hdc, ( cubeVertices[1].x) + centre.x, ( cubeVertices[1].y) + centre.y, NULL);
-    LineTo(hdc, ( cubeVertices[5].x) + centre.x, ( cubeVertices[5].y) + centre.y);
-    MoveToEx(hdc, ( cubeVertices[2].x) + centre.x, ( cubeVertices[2].y) + centre.y, NULL);
-    LineTo(hdc, ( cubeVertices[6].x) + centre.x, ( cubeVertices[6].y) + centre.y);
-    MoveToEx(hdc, ( cubeVertices[3].x) + centre.x, ( cubeVertices[3].y) + centre.y, NULL);
-    LineTo(hdc, ( cubeVertices[7].x) + centre.x, ( cubeVertices[7].y) + centre.y);
+    MoveToEx(hdc, ( cubeVertices[0]) + centre.x, ( cubeVertices[1]) + centre.y, NULL);
+    LineTo(hdc, ( cubeVertices[12]) + centre.x, ( cubeVertices[13]) + centre.y);
+    MoveToEx(hdc, ( cubeVertices[3]) + centre.x, ( cubeVertices[4]) + centre.y, NULL);
+    LineTo(hdc, ( cubeVertices[15]) + centre.x, ( cubeVertices[16]) + centre.y);
+    MoveToEx(hdc, ( cubeVertices[6]) + centre.x, ( cubeVertices[7]) + centre.y, NULL);
+    LineTo(hdc, ( cubeVertices[18]) + centre.x, ( cubeVertices[19]) + centre.y);
+    MoveToEx(hdc, ( cubeVertices[9]) + centre.x, ( cubeVertices[10]) + centre.y, NULL);
+    LineTo(hdc, ( cubeVertices[21]) + centre.x, ( cubeVertices[22]) + centre.y);
 
     // Calculate and draw the rate.
     if (delayCounter == 0)
@@ -310,6 +344,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     MSG Msg;
 
     InitializeCriticalSection(&cubeDraw);
+    sphereVertices = generateSpherePoints(spherePoints);
 
     // Registering the Window Class
     wc.cbSize = sizeof(WNDCLASSEX);
