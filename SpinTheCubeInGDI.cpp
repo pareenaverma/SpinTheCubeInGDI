@@ -12,9 +12,6 @@
 #undef small
 #ifdef _M_ARM64
 #include <armpl.h>
-#else
-#include <cmath>
-
 #endif
 
 #define _USE_MATH_DEFINES
@@ -24,9 +21,12 @@
 BOOL UseCube = false;
 BOOL useAPL = false;
 BOOL closeThreads = false;
-int ThreadCount = 2;
+const int ThreadCount = 10;
 ULONG timeVal = 0;
 ULONG timeValBLAS = 0;
+std::vector<HANDLE> semaphoreList;
+std::vector<HANDLE> doneList;
+
 
 const double scale = 240;
 const int spherePoints = 40000;
@@ -43,8 +43,7 @@ HPEN whitepen = CreatePen(PS_SOLID, 1, 0x00ffffff);
 HFONT hfon = 0;
 
 std::vector<HANDLE> thread_handles;
-
-CRITICAL_SECTION cubeDraw = { 0 };
+CRITICAL_SECTION cubeDraw[ThreadCount];
 
 // Speed counter
 int Calculations = 0;
@@ -97,71 +96,56 @@ std::vector<double> generateSpherePoints(int numPoints)
     return points;
 }
 
-// Function to apply a rotation matrix to a matrix of 3D points using C operations
+// Apply a rotation matrix to the list of 3D verticies using C operators
 void applyRotation(std::vector<double>& shape, const std::vector<double>& rotMatrix, int startPoint, int stride)
 {
-    EnterCriticalSection(&cubeDraw);
+    double refx, refy, refz;
 
-    auto startTick = GetTickCount();
+    // Start looking at the reference verticies 
     auto point = shape.begin();
     point += startPoint * 3;
+
+    // Start the output transformed verticies 
     auto outpoint = drawSphereVertecies.begin();
     outpoint += startPoint * 3;
 
     int counter = 0;
-
     while (point != shape.end() && counter < stride)
     {
         counter++;
 
-        // read three points
-        Point3D startPoint;
-        startPoint.x = *point; point++;
-        startPoint.y = *point; point++;
-        startPoint.z = *point; point++;
+        // read three values for a 3d point
+        refx = *point; point++;
+        refy = *point; point++;
+        refz = *point; point++;
 
         // go back two points
-        Point3D rotatedPoint;
-        rotatedPoint.x = scale * rotMatrix[2] * startPoint.x + scale * rotMatrix[1] * startPoint.y + scale * rotMatrix[0] * startPoint.z;
-        rotatedPoint.y = scale * rotMatrix[5] * startPoint.x + scale * rotMatrix[4] * startPoint.y + scale * rotMatrix[3] * startPoint.z;
-        rotatedPoint.z = scale * rotMatrix[8] * startPoint.x + scale * rotMatrix[7] * startPoint.y + scale * rotMatrix[6] * startPoint.z;
-
-        *outpoint = rotatedPoint.x; outpoint++;
-        *outpoint = rotatedPoint.y; outpoint++;
-        *outpoint = rotatedPoint.z; outpoint++;
+        *outpoint = scale * rotMatrix[2] * refx + scale * rotMatrix[1] * refy + scale * rotMatrix[0] * refz; outpoint++;
+        *outpoint = scale * rotMatrix[5] * refx + scale * rotMatrix[4] * refy + scale * rotMatrix[3] * refz; outpoint++;
+        *outpoint = scale * rotMatrix[8] * refx + scale * rotMatrix[7] * refy + scale * rotMatrix[6] * refz; outpoint++;
     }
-
-    timeVal += GetTickCount() - startTick;
-
-    LeaveCriticalSection(&cubeDraw);
 }
 
+// Apply a rotation matrix to the list of 3D verticies using Arm Performance Libraries
 void applyRotationBLAS(std::vector<double>& shape, const std::vector<double>& rotMatrix)
 {
-    EnterCriticalSection(&cubeDraw);
-
-    auto startTick = GetTickCount();
-
+    EnterCriticalSection(&cubeDraw[0]);
 #ifdef _M_ARM64
         cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (int)shape.size() / 3, 3, 3, scale, shape.data(), 3, rotMatrix.data(), 3, 0.0, drawSphereVertecies.data(), 3);
 #endif
-    timeValBLAS += GetTickCount() - startTick;
-
-    LeaveCriticalSection(&cubeDraw);
+    LeaveCriticalSection(&cubeDraw[0]);
 }
 
-
-std::vector<HANDLE> semaphoreList;
-std::vector<HANDLE> doneList;
-
-
+// increment the rotation matrix
 void RotateCube(int numCores)
 {
     rotationAngle += 0.00001;
     if (rotationAngle > 2 * M_PI)
+    {
         rotationAngle -= 2 * M_PI;
+    }
 
-    // rotate
+    // rotate around Z and Y
     rotationInX[0] = cos(rotationAngle) * cos(rotationAngle);
     rotationInX[1] = -sin(rotationAngle);
     rotationInX[2] = cos(rotationAngle) * sin(rotationAngle);
@@ -179,6 +163,10 @@ void RotateCube(int numCores)
     }
     else
     {
+//        EnterCriticalSection(&cubeDraw[0]);
+//        applyRotation(UseCube ? cubeVertices : sphereVertices, rotationInX, 0, spherePoints);
+//        LeaveCriticalSection(&cubeDraw[threadNum]);
+
         for (int x = 0; x < numCores; x++)
         {
             ReleaseSemaphore(semaphoreList[x], 1, NULL);
@@ -203,8 +191,10 @@ DWORD WINAPI CalcThreadProc(LPVOID data)
         // wait on a semaphore
         WaitForSingleObject(semaphoreList[threadNum], INFINITE);
 
+        EnterCriticalSection(&cubeDraw[threadNum]);
         // run the calculations for the set of points - need to be global
         applyRotation(UseCube ? cubeVertices : sphereVertices, rotationInX, threadNum * pointStride, pointStride);
+        LeaveCriticalSection(&cubeDraw[threadNum]);
 
         // set a semaphore to say we are done
         ReleaseSemaphore(doneList[threadNum], 1, NULL);
@@ -252,9 +242,19 @@ void DrawCube(HDC hdc, RECT cliRect)
     auto oldfon = SelectObject(hdc, hfon);
     auto oldPen = SelectObject(hdc, whitepen);
 
-    EnterCriticalSection(&cubeDraw);
-    // Draw new
+    if (useAPL)
+    {
+        EnterCriticalSection(&cubeDraw[0]);
+    }
+    else
+    {
+        for (int x = 0; x < ThreadCount; x++)
+        {
+            EnterCriticalSection(&cubeDraw[x]);
+        }
+    }
 
+    // Draw new
     if (UseCube)
     {
         MoveToEx(hdc, drawSphereVertecies[0] + centre.x, drawSphereVertecies[1] + centre.y, NULL);
@@ -314,7 +314,17 @@ void DrawCube(HDC hdc, RECT cliRect)
 
     DrawText(hdc, rateMsg, -1, &cliRect, DT_LEFT);
 
-    LeaveCriticalSection(&cubeDraw);
+    if (useAPL)
+    {
+        LeaveCriticalSection(&cubeDraw[0]);
+    }
+    else
+    {
+        for (int x = 0; x < ThreadCount; x++)
+        {
+            LeaveCriticalSection(&cubeDraw[x]);
+        }
+    }
 
     SelectObject(hdc, oldfon);
     SelectObject(hdc, oldPen);
@@ -441,7 +451,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     HWND hwnd;
     MSG Msg;
 
-    InitializeCriticalSection(&cubeDraw);
+    for (int x = 0; x < ThreadCount; x++)
+    {
+        InitializeCriticalSection(&cubeDraw[x]);
+    }
+
     sphereVertices = generateSpherePoints(spherePoints);
     drawSphereVertecies = sphereVertices;
 
@@ -477,7 +491,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         L"Spinning Geometry Demo: x64",
 #endif
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 800 , 600,
+        CW_USEDEFAULT, CW_USEDEFAULT, 1024 , 960,
         NULL, NULL, hInstance, NULL);
 
     if (hwnd == NULL)
@@ -497,7 +511,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         DispatchMessage(&Msg);
     }
 
-    DeleteCriticalSection(&cubeDraw);
+    for (int x = 0; x < ThreadCount; x++)
+    {
+        DeleteCriticalSection(&cubeDraw[x]);
+    }
 
     return (UINT) Msg.wParam;
 }
