@@ -1,5 +1,5 @@
 // Slider to control rotation speed
-// Add more cubes
+// Add the CPU architecture to the window title
 
 #include <windows.h>
 #include <string>
@@ -20,17 +20,22 @@
 #include <math.h>
 #include <vector>
 
+BOOL UseCube = false;
 BOOL useAPL = false;
 BOOL closeThreads = false;
-const int scale = 40;
-const int spherePoints = 1000;
+BOOL UseMultiThread = false;
+const double scale = 240;
+const int spherePoints = 40000;
+const int stride = spherePoints/2000;
+
+static wchar_t rateMsg[1024] = { 0 };
 
 // Define the window title
 const wchar_t g_szClassName[] = L"myWindowClass";
 
 // Angle of rotation
 double rotationAngle = 0.0;
-HPEN whitepen = CreatePen(PS_SOLID, 4, 0x00ffffff);
+HPEN whitepen = CreatePen(PS_SOLID, 1, 0x00ffffff);
 HFONT hfon = 0;
 
 std::vector<HANDLE> thread_handles;
@@ -48,25 +53,21 @@ struct Point3D
 };
 
 // Define the rotation matrix 
-std::vector<double> rotationInX = {
-    0,            0,           1,
-    cos(M_PI / 2), -sin(M_PI / 2), 0,
-    sin(M_PI / 2),  cos(M_PI / 2), 0
+std::vector<double> rotationInX = 
+{
+    0,0,1,
+    0,1,0, 
+    1,0,0
 };
-
-//// Define a cube by its vertices
-//std::vector<Point3D> cubeVertices = {
-//    {1 * scale, 1 * scale, 1 * scale}, {-1 * scale, 1 * scale, 1 * scale}, {-1* scale, -1 * scale, 1 * scale}, {1 * scale, -1 * scale, 1 * scale},
-//    {1 * scale, 1 * scale, -1 * scale}, {-1 * scale, 1 * scale, -1 * scale}, {-1 * scale, -1 * scale, -1 * scale}, {1 * scale, -1 * scale, -1 * scale}
-//};
 
 // Define a cube by its vertices
 std::vector<double> cubeVertices = {
-    1 * scale, 1 * scale, 1 * scale, -1 * scale, 1 * scale, 1 * scale, -1 * scale, -1 * scale, 1 * scale, 1 * scale, -1 * scale, 1 * scale,
-    1 * scale, 1 * scale, -1 * scale, -1 * scale, 1 * scale, -1 * scale, -1 * scale, -1 * scale, -1 * scale, 1 * scale, -1 * scale, -1 * scale
+    1 , 1 , 1 , -1 , 1 , 1 , -1 , -1 , 1 , 1 , -1 , 1 ,
+    1 , 1 , -1 , -1 , 1 , -1 , -1 , -1 , -1 , 1 , -1 , -1 
 };
 
 std::vector<double> sphereVertices;
+std::vector<double> drawSphereVertecies;
 
 std::vector<double> generateSpherePoints(int numPoints) 
 {
@@ -92,13 +93,18 @@ std::vector<double> generateSpherePoints(int numPoints)
     return points;
 }
 
+ULONG timeVal = 0;
+ULONG timeValBLAS = 0;
+
 
 // Function to apply a rotation matrix to a matrix of 3D points using C operations
 void applyRotation(std::vector<double> &shape, const std::vector<double>& rotMatrix)
 {
     EnterCriticalSection(&cubeDraw);
 
+    auto startTick = GetTickCount();
     auto point = shape.begin();
+    auto outpoint = drawSphereVertecies.begin();
     while (point != shape.end())
     {
 
@@ -106,46 +112,117 @@ void applyRotation(std::vector<double> &shape, const std::vector<double>& rotMat
         Point3D startPoint;
         startPoint.x = *point; point++;
         startPoint.y = *point; point++;
-        startPoint.z = *point;
+        startPoint.z = *point; point++;
 
         // go back two points
-        point -= 2;
-
         Point3D rotatedPoint;
-        rotatedPoint.x = rotMatrix[0] * startPoint.x + rotMatrix[1] * startPoint.y + rotMatrix[2] * startPoint.z;
-        rotatedPoint.y = rotMatrix[3] * startPoint.x + rotMatrix[4] * startPoint.y + rotMatrix[5] * startPoint.z;
-        rotatedPoint.z = rotMatrix[6] * startPoint.x + rotMatrix[7] * startPoint.y + rotMatrix[8] * startPoint.z;
+        rotatedPoint.x = scale * rotMatrix[2] * startPoint.x + scale * rotMatrix[1] * startPoint.y + scale * rotMatrix[0] * startPoint.z;
+        rotatedPoint.y = scale * rotMatrix[5] * startPoint.x + scale * rotMatrix[4] * startPoint.y + scale * rotMatrix[3] * startPoint.z;
+        rotatedPoint.z = scale * rotMatrix[8] * startPoint.x + scale * rotMatrix[7] * startPoint.y + scale * rotMatrix[6] * startPoint.z;
 
-        *point = rotatedPoint.x; point++;
-        *point = rotatedPoint.y; point++;
-        *point = rotatedPoint.z; point++;
+        *outpoint = rotatedPoint.x; outpoint++;
+        *outpoint = rotatedPoint.y; outpoint++;
+        *outpoint = rotatedPoint.z; outpoint++;
     }
+
+    timeVal += GetTickCount() - startTick;
 
     Calculations++;
 
     LeaveCriticalSection(&cubeDraw);
 }
 
-void applyRotationBLAS(std::vector<double>& shape, const std::vector<double>& rotMatrix)
+// Function to apply a rotation matrix to a matrix of 3D points using C operations
+void applyRotationMT(std::vector<double>& shape, const std::vector<double>& rotMatrix)
 {
     EnterCriticalSection(&cubeDraw);
-    double * newCubeVertices = new double[shape.size()];
 
-#ifdef _M_ARM64
-        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, shape.size() / 3, 3, 3, 1.0, shape.data(), 3, rotMatrix.data(), 3, 0.0, newCubeVertices, 3);
-        memcpy(shape.data(),newCubeVertices, shape.size() * sizeof(double));
-#endif
+    auto startTick = GetTickCount();
+    auto point = shape.begin();
+    auto outpoint = drawSphereVertecies.begin();
+    while (point != shape.end())
+    {
+
+        // read three points
+        Point3D startPoint;
+        startPoint.x = *point; point++;
+        startPoint.y = *point; point++;
+        startPoint.z = *point; point++;
+
+        // go back two points
+        Point3D rotatedPoint;
+        rotatedPoint.x = scale * rotMatrix[2] * startPoint.x + scale * rotMatrix[1] * startPoint.y + scale * rotMatrix[0] * startPoint.z;
+        rotatedPoint.y = scale * rotMatrix[5] * startPoint.x + scale * rotMatrix[4] * startPoint.y + scale * rotMatrix[3] * startPoint.z;
+        rotatedPoint.z = scale * rotMatrix[8] * startPoint.x + scale * rotMatrix[7] * startPoint.y + scale * rotMatrix[6] * startPoint.z;
+
+        *outpoint = rotatedPoint.x; outpoint++;
+        *outpoint = rotatedPoint.y; outpoint++;
+        *outpoint = rotatedPoint.z; outpoint++;
+    }
+
+    timeVal += GetTickCount() - startTick;
 
     Calculations++;
 
     LeaveCriticalSection(&cubeDraw);
+}
+
+
+
+void applyRotationBLAS(std::vector<double>& shape, const std::vector<double>& rotMatrix)
+{
+    EnterCriticalSection(&cubeDraw);
+
+    auto startTick = GetTickCount();
+
+#ifdef _M_ARM64
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (int)shape.size() / 3, 3, 3, scale, shape.data(), 3, rotMatrix.data(), 3, 0.0, drawSphereVertecies.data(), 3);
+#endif
+        timeValBLAS += GetTickCount() - startTick;
+    Calculations++;
+
+    LeaveCriticalSection(&cubeDraw);
+}
+
+void RotateCube()
+{
+    rotationAngle += 0.00001;
+    if (rotationAngle > 2 * M_PI)
+        rotationAngle -= 2 * M_PI;
+
+    // rotate
+    rotationInX[0] = cos(rotationAngle) * cos(rotationAngle);
+    rotationInX[1] = -sin(rotationAngle);
+    rotationInX[2] = cos(rotationAngle) * sin(rotationAngle);
+    rotationInX[3] = sin(rotationAngle) * cos(rotationAngle);
+    rotationInX[4] = cos(rotationAngle);
+    rotationInX[5] = sin(rotationAngle) * sin(rotationAngle);
+    rotationInX[6] = -sin(rotationAngle);
+    rotationInX[7] = 0;
+    rotationInX[8] = cos(rotationAngle);
+
+
+    if (useAPL)
+    {
+        applyRotationBLAS(UseCube ? cubeVertices : sphereVertices, rotationInX);
+    }
+    else
+    {
+        if (UseMultiThread)
+        {
+            applyRotationMT(UseCube ? cubeVertices : sphereVertices, rotationInX);
+
+        }
+        else
+        {
+            applyRotation(UseCube ? cubeVertices : sphereVertices, rotationInX);
+        }
+    }
 }
 
 // Function to draw a cube
 void DrawCube(HDC hdc, RECT cliRect)
 {
-    static int delayCounter = 0;
-    static wchar_t msg[1024] = { 0 };
     POINT centre = { (cliRect.right - cliRect.left) / 2, (cliRect.bottom - cliRect.top) / 2 };
     if (hfon == 0)
     {
@@ -162,48 +239,65 @@ void DrawCube(HDC hdc, RECT cliRect)
 
     EnterCriticalSection(&cubeDraw);
     // Draw new
-    MoveToEx(hdc, cubeVertices[0] + centre.x, cubeVertices[1] + centre.y, NULL);
-    LineTo(hdc, ( cubeVertices[3]) + centre.x, ( cubeVertices[4]) + centre.y);
-    LineTo(hdc, ( cubeVertices[6]) + centre.x, ( cubeVertices[7]) + centre.y);
-    LineTo(hdc, ( cubeVertices[9]) + centre.x, ( cubeVertices[10]) + centre.y);
-    LineTo(hdc, ( cubeVertices[0]) + centre.x, ( cubeVertices[1]) + centre.y);
 
-    MoveToEx(hdc, ( cubeVertices[12]) + centre.x, ( cubeVertices[13]) + centre.y, NULL);
-    LineTo(hdc, ( cubeVertices[15]) + centre.x, ( cubeVertices[16]) + centre.y);
-    LineTo(hdc, ( cubeVertices[18]) + centre.x, ( cubeVertices[19]) + centre.y);
-    LineTo(hdc, ( cubeVertices[21]) + centre.x, ( cubeVertices[22]) + centre.y);
-    LineTo(hdc, ( cubeVertices[12]) + centre.x, ( cubeVertices[13]) + centre.y);
-
-    MoveToEx(hdc, ( cubeVertices[0]) + centre.x, ( cubeVertices[1]) + centre.y, NULL);
-    LineTo(hdc, ( cubeVertices[12]) + centre.x, ( cubeVertices[13]) + centre.y);
-    MoveToEx(hdc, ( cubeVertices[3]) + centre.x, ( cubeVertices[4]) + centre.y, NULL);
-    LineTo(hdc, ( cubeVertices[15]) + centre.x, ( cubeVertices[16]) + centre.y);
-    MoveToEx(hdc, ( cubeVertices[6]) + centre.x, ( cubeVertices[7]) + centre.y, NULL);
-    LineTo(hdc, ( cubeVertices[18]) + centre.x, ( cubeVertices[19]) + centre.y);
-    MoveToEx(hdc, ( cubeVertices[9]) + centre.x, ( cubeVertices[10]) + centre.y, NULL);
-    LineTo(hdc, ( cubeVertices[21]) + centre.x, ( cubeVertices[22]) + centre.y);
-
-    // Calculate and draw the rate.
-    if (delayCounter == 0)
+    if (UseCube)
     {
-        DWORD now = GetTickCount();
-        DWORD diff = now - startTime;
-        startTime = now;
+        MoveToEx(hdc, drawSphereVertecies[0] + centre.x, drawSphereVertecies[1] + centre.y, NULL);
+        LineTo(hdc, (drawSphereVertecies[3]) + centre.x, (drawSphereVertecies[4]) + centre.y);
+        LineTo(hdc, (drawSphereVertecies[6]) + centre.x, (drawSphereVertecies[7]) + centre.y);
+        LineTo(hdc, (drawSphereVertecies[9]) + centre.x, (drawSphereVertecies[10]) + centre.y);
+        LineTo(hdc, (drawSphereVertecies[0]) + centre.x, (drawSphereVertecies[1]) + centre.y);
 
-        int calcPerSecond = (Calculations * 1000.0) / (diff * 1.0);
-        Calculations = 0;
-        std::wstringstream stream;
-        stream << L"1k Ops/s: " << std::fixed << std::setprecision(2) << calcPerSecond / 1000.0;
-        wsprintf(msg, stream.str().c_str());
+        MoveToEx(hdc, (drawSphereVertecies[12]) + centre.x, (drawSphereVertecies[13]) + centre.y, NULL);
+        LineTo(hdc, (drawSphereVertecies[15]) + centre.x, (drawSphereVertecies[16]) + centre.y);
+        LineTo(hdc, (drawSphereVertecies[18]) + centre.x, (drawSphereVertecies[19]) + centre.y);
+        LineTo(hdc, (drawSphereVertecies[21]) + centre.x, (drawSphereVertecies[22]) + centre.y);
+        LineTo(hdc, (drawSphereVertecies[12]) + centre.x, (drawSphereVertecies[13]) + centre.y);
+
+        MoveToEx(hdc, (drawSphereVertecies[0]) + centre.x, (drawSphereVertecies[1]) + centre.y, NULL);
+        LineTo(hdc, (drawSphereVertecies[12]) + centre.x, (drawSphereVertecies[13]) + centre.y);
+        MoveToEx(hdc, (drawSphereVertecies[3]) + centre.x, (drawSphereVertecies[4]) + centre.y, NULL);
+        LineTo(hdc, (drawSphereVertecies[15]) + centre.x, (drawSphereVertecies[16]) + centre.y);
+        MoveToEx(hdc, (drawSphereVertecies[6]) + centre.x, (drawSphereVertecies[7]) + centre.y, NULL);
+        LineTo(hdc, (drawSphereVertecies[18]) + centre.x, (drawSphereVertecies[19]) + centre.y);
+        MoveToEx(hdc, (drawSphereVertecies[9]) + centre.x, (drawSphereVertecies[10]) + centre.y, NULL);
+        LineTo(hdc, (drawSphereVertecies[21]) + centre.x, (drawSphereVertecies[22]) + centre.y);
+    }
+    else
+    {
+        // just draw between each of the vertecies
+        auto it = drawSphereVertecies.begin();
+
+        double startx = *it++;
+        double starty = *it++;
+        double startz = *it++;
+        it = drawSphereVertecies.begin();
+
+        MoveToEx(hdc, startx + centre.x, starty + centre.y, NULL);
+        int counter = 0;
+        while (it != drawSphereVertecies.end())
+        {
+            int x = (int)*it++; counter++;
+            int y = (int)*it++; counter++;
+            int z = (int)*it++; counter++;
+
+            if (UseCube)
+            {
+                LineTo(hdc, x + centre.x, y + centre.y);
+            }
+
+            if (z>=0.0)
+            SetPixelV(hdc, x + centre.x, y + centre.y, 0x0000FFFF);
+
+            if (stride > 1)
+            {
+                it += (stride-1) * 3;
+            }
+        }
+
     }
 
-    delayCounter++;
-    if (delayCounter == 50)
-    {
-        delayCounter = 0;
-    }
-
-    DrawText(hdc, msg, -1, &cliRect, DT_LEFT);
+    DrawText(hdc, rateMsg, -1, &cliRect, DT_LEFT);
 
     LeaveCriticalSection(&cubeDraw);
 
@@ -211,32 +305,32 @@ void DrawCube(HDC hdc, RECT cliRect)
     SelectObject(hdc, oldPen);
 }
 
-void RotateCube()
+DWORD WINAPI CalcThreadProc(LPVOID data)
 {
-    // Update the angle of rotation
-//    rotationAngle += 0.0000000000000001;
-    rotationAngle += 0.000000000001;
-    if (rotationAngle > 2 * M_PI)
-        rotationAngle -= 2 * M_PI;
+    // need to know where to start and where to end
 
-    // rotate
-    rotationInX[3] = cos(rotationAngle);
-    rotationInX[4] = -sin(rotationAngle);
-    rotationInX[6] = sin(rotationAngle);
-    rotationInX[7] = cos(rotationAngle);
+    while (!closeThreads)
+    {
+        // wait on a semaphore
+        // run the calculations for the set of points - need to be global
+        // set a semaphore to say we are done
+    }
 
-    if (useAPL)
-    {
-        applyRotationBLAS(cubeVertices, rotationInX);
-    }
-    else
-    {
-        applyRotation(cubeVertices, rotationInX);
-    }
+    return 0;
 }
+
 
 DWORD WINAPI ThreadProc(LPVOID cubeID)
 {
+    // Check how many cores there are and spin that number of threads
+    int numCores = 10;
+
+    for (int count =0; count < numCores;count++)
+	{
+		thread_handles.push_back(CreateThread(NULL, 0, CalcThreadProc, (LPVOID)count, 0, NULL));
+	}
+
+
     while (!closeThreads)
     {
         RotateCube();
@@ -304,15 +398,37 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_TIMER:
     {
-        // Invalidate the window to trigger a WM_PAINT for redrawing
-        InvalidateRect(hwnd, NULL, FALSE);
+        if (wParam == 1)
+        {
+			// Invalidate the window to trigger a WM_PAINT for redrawing
+            InvalidateRect(hwnd, NULL, FALSE);
+		}
+        else
+        {
+            DWORD now = GetTickCount();
+            DWORD diff = now - startTime;
+            startTime = now;
+
+            // calculate how much time is spent in the rotation
+            auto c1 = 1000.0 * timeValBLAS / (double)Calculations;
+            auto c2 = 1000.0 * timeVal / (double)Calculations;
+            timeValBLAS = 0;
+            timeVal = 0;
+
+            int calcPerSecond = (Calculations * 1000.0) / (diff * 1.0);
+            Calculations = 0;
+            std::wstringstream stream;
+            stream << L"Transforms per second: " << std::fixed << std::setprecision(2) << calcPerSecond / 1000.0 << L"k";// BLAS: " << c1 << " and C : " << c2;
+            wsprintf(rateMsg, stream.str().c_str());
+        }
     }
     break;
     case WM_CREATE:
     {
         // Set a timer to update the animation
         startTime = GetTickCount();
-        SetTimer(hwnd, 1, 50, NULL);
+        SetTimer(hwnd, 1, 100, NULL);
+        SetTimer(hwnd, 2, 1000, NULL);
         thread_handles.push_back(CreateThread(NULL, 0, ThreadProc, (LPVOID)1, 0, NULL));
     }
     break;
@@ -345,6 +461,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     InitializeCriticalSection(&cubeDraw);
     sphereVertices = generateSpherePoints(spherePoints);
+    drawSphereVertecies = sphereVertices;
 
     // Registering the Window Class
     wc.cbSize = sizeof(WNDCLASSEX);
@@ -372,9 +489,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     hwnd = CreateWindowEx(
         WS_EX_CLIENTEDGE,
         g_szClassName,
-        L"Spinning Cube Demo",
+#ifdef _M_ARM64
+        L"Spinning Geometry Demo: Arm64" ,
+#else
+        L"Spinning Geometry Demo: x64",
+#endif
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 480 , 420,
+        CW_USEDEFAULT, CW_USEDEFAULT, 800 , 600,
         NULL, NULL, hInstance, NULL);
 
     if (hwnd == NULL)
