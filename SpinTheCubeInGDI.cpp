@@ -1,5 +1,6 @@
-// Slider to control rotation speed
-// Add the CPU architecture to the window title
+// split the calculations out onto multi threads
+// start event / semaphore and an end even / semaphore
+
 
 #include <windows.h>
 #include <string>
@@ -23,7 +24,10 @@
 BOOL UseCube = false;
 BOOL useAPL = false;
 BOOL closeThreads = false;
-BOOL UseMultiThread = false;
+int ThreadCount = 2;
+ULONG timeVal = 0;
+ULONG timeValBLAS = 0;
+
 const double scale = 240;
 const int spherePoints = 40000;
 const int stride = spherePoints/2000;
@@ -93,20 +97,22 @@ std::vector<double> generateSpherePoints(int numPoints)
     return points;
 }
 
-ULONG timeVal = 0;
-ULONG timeValBLAS = 0;
-
-
 // Function to apply a rotation matrix to a matrix of 3D points using C operations
-void applyRotation(std::vector<double> &shape, const std::vector<double>& rotMatrix)
+void applyRotation(std::vector<double>& shape, const std::vector<double>& rotMatrix, int startPoint, int stride)
 {
     EnterCriticalSection(&cubeDraw);
 
     auto startTick = GetTickCount();
     auto point = shape.begin();
+    point += startPoint * 3;
     auto outpoint = drawSphereVertecies.begin();
-    while (point != shape.end())
+    outpoint += startPoint * 3;
+
+    int counter = 0;
+
+    while (point != shape.end() && counter < stride)
     {
+        counter++;
 
         // read three points
         Point3D startPoint;
@@ -127,47 +133,8 @@ void applyRotation(std::vector<double> &shape, const std::vector<double>& rotMat
 
     timeVal += GetTickCount() - startTick;
 
-    Calculations++;
-
     LeaveCriticalSection(&cubeDraw);
 }
-
-// Function to apply a rotation matrix to a matrix of 3D points using C operations
-void applyRotationMT(std::vector<double>& shape, const std::vector<double>& rotMatrix)
-{
-    EnterCriticalSection(&cubeDraw);
-
-    auto startTick = GetTickCount();
-    auto point = shape.begin();
-    auto outpoint = drawSphereVertecies.begin();
-    while (point != shape.end())
-    {
-
-        // read three points
-        Point3D startPoint;
-        startPoint.x = *point; point++;
-        startPoint.y = *point; point++;
-        startPoint.z = *point; point++;
-
-        // go back two points
-        Point3D rotatedPoint;
-        rotatedPoint.x = scale * rotMatrix[2] * startPoint.x + scale * rotMatrix[1] * startPoint.y + scale * rotMatrix[0] * startPoint.z;
-        rotatedPoint.y = scale * rotMatrix[5] * startPoint.x + scale * rotMatrix[4] * startPoint.y + scale * rotMatrix[3] * startPoint.z;
-        rotatedPoint.z = scale * rotMatrix[8] * startPoint.x + scale * rotMatrix[7] * startPoint.y + scale * rotMatrix[6] * startPoint.z;
-
-        *outpoint = rotatedPoint.x; outpoint++;
-        *outpoint = rotatedPoint.y; outpoint++;
-        *outpoint = rotatedPoint.z; outpoint++;
-    }
-
-    timeVal += GetTickCount() - startTick;
-
-    Calculations++;
-
-    LeaveCriticalSection(&cubeDraw);
-}
-
-
 
 void applyRotationBLAS(std::vector<double>& shape, const std::vector<double>& rotMatrix)
 {
@@ -178,13 +145,17 @@ void applyRotationBLAS(std::vector<double>& shape, const std::vector<double>& ro
 #ifdef _M_ARM64
         cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (int)shape.size() / 3, 3, 3, scale, shape.data(), 3, rotMatrix.data(), 3, 0.0, drawSphereVertecies.data(), 3);
 #endif
-        timeValBLAS += GetTickCount() - startTick;
-    Calculations++;
+    timeValBLAS += GetTickCount() - startTick;
 
     LeaveCriticalSection(&cubeDraw);
 }
 
-void RotateCube()
+
+std::vector<HANDLE> semaphoreList;
+std::vector<HANDLE> doneList;
+
+
+void RotateCube(int numCores)
 {
     rotationAngle += 0.00001;
     if (rotationAngle > 2 * M_PI)
@@ -208,16 +179,60 @@ void RotateCube()
     }
     else
     {
-        if (UseMultiThread)
+        for (int x = 0; x < numCores; x++)
         {
-            applyRotationMT(UseCube ? cubeVertices : sphereVertices, rotationInX);
+            ReleaseSemaphore(semaphoreList[x], 1, NULL);
+        }
 
-        }
-        else
-        {
-            applyRotation(UseCube ? cubeVertices : sphereVertices, rotationInX);
-        }
+        WaitForMultipleObjects(numCores, doneList.data(), TRUE, INFINITE);
     }
+
+    Calculations++;
+}
+
+
+DWORD WINAPI CalcThreadProc(LPVOID data)
+{
+    // need to know where to start and where to end
+    int threadNum = LOWORD(data);
+    int threadCount = HIWORD(data);
+    int pointStride = spherePoints / threadCount;
+
+    while (!closeThreads)
+    {
+        // wait on a semaphore
+        WaitForSingleObject(semaphoreList[threadNum], INFINITE);
+
+        // run the calculations for the set of points - need to be global
+        applyRotation(UseCube ? cubeVertices : sphereVertices, rotationInX, threadNum * pointStride, pointStride);
+
+        // set a semaphore to say we are done
+        ReleaseSemaphore(doneList[threadNum], 1, NULL);
+    }
+
+    return 0;
+}
+
+
+DWORD WINAPI ThreadProc(LPVOID numCores)
+{
+    int coreCount = static_cast<int>(reinterpret_cast<std::uintptr_t>(numCores));
+
+    // Check how many cores there are and spin that number of threads
+    for (int count =0; count < coreCount;count++)
+	{
+        semaphoreList.push_back(CreateSemaphore(NULL, 0,1,NULL));
+        doneList.push_back(CreateSemaphore(NULL, 0, 1, NULL));
+
+		thread_handles.push_back(CreateThread(NULL, 0, CalcThreadProc, (LPVOID) MAKELPARAM(count, numCores), 0, NULL));
+	}
+
+    while (!closeThreads)
+    {
+        RotateCube(coreCount);
+    }
+
+    return 0;
 }
 
 // Function to draw a cube
@@ -273,7 +288,7 @@ void DrawCube(HDC hdc, RECT cliRect)
         double startz = *it++;
         it = drawSphereVertecies.begin();
 
-        MoveToEx(hdc, startx + centre.x, starty + centre.y, NULL);
+        MoveToEx(hdc, static_cast<int>(startx + centre.x), static_cast<int>(starty + centre.y), NULL);
         int counter = 0;
         while (it != drawSphereVertecies.end())
         {
@@ -286,12 +301,12 @@ void DrawCube(HDC hdc, RECT cliRect)
                 LineTo(hdc, x + centre.x, y + centre.y);
             }
 
-            if (z>=0.0)
-            SetPixelV(hdc, x + centre.x, y + centre.y, 0x0000FFFF);
+            if (z >= 0.0)
+                SetPixelV(hdc, x + centre.x, y + centre.y, 0x0000FFFF);
 
             if (stride > 1)
             {
-                it += (stride-1) * 3;
+                it += (stride - 1) * 3;
             }
         }
 
@@ -305,39 +320,6 @@ void DrawCube(HDC hdc, RECT cliRect)
     SelectObject(hdc, oldPen);
 }
 
-DWORD WINAPI CalcThreadProc(LPVOID data)
-{
-    // need to know where to start and where to end
-
-    while (!closeThreads)
-    {
-        // wait on a semaphore
-        // run the calculations for the set of points - need to be global
-        // set a semaphore to say we are done
-    }
-
-    return 0;
-}
-
-
-DWORD WINAPI ThreadProc(LPVOID cubeID)
-{
-    // Check how many cores there are and spin that number of threads
-    int numCores = 10;
-
-    for (int count =0; count < numCores;count++)
-	{
-		thread_handles.push_back(CreateThread(NULL, 0, CalcThreadProc, (LPVOID)count, 0, NULL));
-	}
-
-
-    while (!closeThreads)
-    {
-        RotateCube();
-    }
-
-    return 0;
-}
 
 // Window procedure function
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -415,7 +397,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             timeValBLAS = 0;
             timeVal = 0;
 
-            int calcPerSecond = (Calculations * 1000.0) / (diff * 1.0);
+            int calcPerSecond = static_cast<int>((Calculations * 1000.0) / (diff * 1.0));
             Calculations = 0;
             std::wstringstream stream;
             stream << L"Transforms per second: " << std::fixed << std::setprecision(2) << calcPerSecond / 1000.0 << L"k";// BLAS: " << c1 << " and C : " << c2;
@@ -429,7 +411,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         startTime = GetTickCount();
         SetTimer(hwnd, 1, 100, NULL);
         SetTimer(hwnd, 2, 1000, NULL);
-        thread_handles.push_back(CreateThread(NULL, 0, ThreadProc, (LPVOID)1, 0, NULL));
+        thread_handles.push_back(CreateThread(NULL, 0, ThreadProc, (LPVOID)ThreadCount, 0, NULL));
     }
     break;
 
