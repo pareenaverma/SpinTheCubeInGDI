@@ -114,15 +114,27 @@ void applyRotation(std::vector<double>& shape, const std::vector<double>& rotMat
     {
         counter++;
 
-        // read three values for a 3d point
+        // take the next three values for a 3d point
         refx = *point; point++;
         refy = *point; point++;
         refz = *point; point++;
 
-        // go back two points
-        *outpoint = scale * rotMatrix[2] * refx + scale * rotMatrix[1] * refy + scale * rotMatrix[0] * refz; outpoint++;
-        *outpoint = scale * rotMatrix[5] * refx + scale * rotMatrix[4] * refy + scale * rotMatrix[3] * refz; outpoint++;
-        *outpoint = scale * rotMatrix[8] * refx + scale * rotMatrix[7] * refy + scale * rotMatrix[6] * refz; outpoint++;
+        // do the matrix multiplication and scale
+        // [ x, y, z]     [ rotation 0, rotation 1, rotation 2]    [newx, newy, newz]
+        //            dot [ rotation 3, rotation 4, rotation 5]  = 
+        //                [ rotation 6, rotation 7, rotation 8]     
+
+        *outpoint = scale * rotMatrix[0] * refx + 
+                    scale * rotMatrix[3] * refy + 
+                    scale * rotMatrix[6] * refz; outpoint++;
+
+        *outpoint = scale * rotMatrix[1] * refx + 
+                    scale * rotMatrix[4] * refy + 
+                    scale * rotMatrix[7] * refz; outpoint++;
+
+        *outpoint = scale * rotMatrix[2] * refx + 
+                    scale * rotMatrix[5] * refy + 
+                    scale * rotMatrix[8] * refz; outpoint++;
     }
 }
 
@@ -131,7 +143,12 @@ void applyRotationBLAS(std::vector<double>& shape, const std::vector<double>& ro
 {
     EnterCriticalSection(&cubeDraw[0]);
 #ifdef _M_ARM64
-        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (int)shape.size() / 3, 3, 3, scale, shape.data(), 3, rotMatrix.data(), 3, 0.0, drawSphereVertecies.data(), 3);
+
+    // Call the BLAS matrix mult for doubles. 
+    // Multiplies each of the 3d points in shape 
+    // list with rotation matrix, and applies scale
+    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (int)shape.size() / 3, 3, 3, scale, shape.data(), 3, rotMatrix.data(), 3, 0.0, drawSphereVertecies.data(), 3);
+
 #endif
     LeaveCriticalSection(&cubeDraw[0]);
 }
