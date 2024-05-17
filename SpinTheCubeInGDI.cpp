@@ -21,7 +21,7 @@
 BOOL UseCube = false;
 BOOL useAPL = false;
 BOOL closeThreads = false;
-const int ThreadCount = 10;
+const int ThreadCount = 7;
 ULONG timeVal = 0;
 ULONG timeValBLAS = 0;
 std::vector<HANDLE> semaphoreList;
@@ -139,6 +139,7 @@ void applyRotation(std::vector<double>& shape, const std::vector<double>& rotMat
 }
 
 // Apply a rotation matrix to the list of 3D verticies using Arm Performance Libraries
+// BLAS implementation for double precision 
 void applyRotationBLAS(std::vector<double>& shape, const std::vector<double>& rotMatrix)
 {
     EnterCriticalSection(&cubeDraw[0]);
