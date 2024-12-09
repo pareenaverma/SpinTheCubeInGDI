@@ -99,7 +99,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <LibraryPath>C:\Program Files\Arm Performance Libraries\armpl_24.04\lib;$(LibraryPath)</LibraryPath>
-    <IncludePath>C:\Program Files\Arm Performance Libraries\armpl_24.04\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Program Files\Arm Performance Libraries\armpl_24.10\lib;C:\Program Files\Arm Performance Libraries\armpl_24.04\include;$(IncludePath)</IncludePath>
+    <ExternalIncludePath>C:\Program Files\Arm Performance Libraries\armpl_24.10\include;$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <LibraryPath>C:\Program Files\Arm Performance Libraries\armpl_24.04\lib;$(LibraryPath)</LibraryPath>
@@ -172,6 +173,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>armpl_lp64.dll.lib;amath.dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Program Files\Arm Performance Libraries\armpl_24.10\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
