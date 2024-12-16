@@ -10,7 +10,9 @@
 #include "Resource.h"
 
 #undef small
-#ifdef _M_ARM64
+#define _USE_ARMPL
+
+#ifdef _M_ARM64 && _USE_ARMPL
 #include <armpl.h>
 #endif
 
@@ -143,13 +145,11 @@ void applyRotation(std::vector<double>& shape, const std::vector<double>& rotMat
 void applyRotationBLAS(std::vector<double>& shape, const std::vector<double>& rotMatrix)
 {
     EnterCriticalSection(&cubeDraw[0]);
-#ifdef _M_ARM64
-
+#ifdef _M_ARM64 && _USE_ARMPL
     // Call the BLAS matrix mult for doubles. 
     // Multiplies each of the 3d points in shape 
     // list with rotation matrix, and applies scale
     cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (int)shape.size() / 3, 3, 3, scale, shape.data(), 3, rotMatrix.data(), 3, 0.0, drawSphereVertecies.data(), 3);
-
 #endif
     LeaveCriticalSection(&cubeDraw[0]);
 }
@@ -360,12 +360,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         // Parse the menu selections:
         switch (wmId)
         {
+#ifdef _M_ARM64 && _USE_ARMPL
+
         case ID_OPTIONS_USE:
             useAPL = !useAPL;
 
             // Set the check
             CheckMenuItem(GetMenu(hwnd) , ID_OPTIONS_USE, (useAPL ? MF_CHECKED : 0));
             break;
+#endif
         default:
             return DefWindowProc(hwnd, msg, wParam, lParam);
         }
@@ -428,8 +431,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int calcPerSecond = static_cast<int>((Calculations * 1000.0) / (diff * 1.0));
             Calculations = 0;
             std::wstringstream stream;
-            stream << L"Transforms per second: " << std::fixed << std::setprecision(2) << calcPerSecond / 1000.0 << L"k";// BLAS: " << c1 << " and C : " << c2;
+            stream << L"Transforms per second: " << std::fixed << std::setprecision(2) << calcPerSecond / 1000.0 << L"k (" << useAPL << ")";// BLAS: " << c1 << " and C : " << c2;
             wsprintf(rateMsg, stream.str().c_str());
+
         }
     }
     break;
