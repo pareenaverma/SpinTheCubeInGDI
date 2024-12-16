@@ -145,7 +145,6 @@ void applyRotation(std::vector<double>& shape, const std::vector<double>& rotMat
 void applyRotationBLAS(std::vector<double>& shape, const std::vector<double>& rotMatrix)
 {
     EnterCriticalSection(&cubeDraw[0]);
-//#ifdef _M_ARM64 && _USE_ARMPL
 #if defined(_M_ARM64) && defined(_USE_ARMPL_DEFINES)
     // Call the BLAS matrix mult for doubles. 
     // Multiplies each of the 3d points in shape 
@@ -182,15 +181,10 @@ void RotateCube(int numCores)
     }
     else
     {
-//        EnterCriticalSection(&cubeDraw[0]);
-//        applyRotation(UseCube ? cubeVertices : sphereVertices, rotationInX, 0, spherePoints);
-//        LeaveCriticalSection(&cubeDraw[threadNum]);
-
         for (int x = 0; x < numCores; x++)
         {
             ReleaseSemaphore(semaphoreList[x], 1, NULL);
         }
-
         WaitForMultipleObjects(numCores, doneList.data(), TRUE, INFINITE);
     }
 
@@ -361,7 +355,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         // Parse the menu selections:
         switch (wmId)
         {
-//#ifdef _M_ARM64 && _USE_ARMPL
 #if defined(_M_ARM64) && defined(_USE_ARMPL_DEFINES)
         case ID_OPTIONS_USE:
             useAPL = !useAPL;
