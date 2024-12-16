@@ -10,9 +10,9 @@
 #include "Resource.h"
 
 #undef small
-#define _USE_ARMPL
+//#define _USE_ARMPL_DEFINES
 
-#ifdef _M_ARM64 && _USE_ARMPL
+#if defined(_M_ARM64) && defined(_USE_ARMPL_DEFINES)
 #include <armpl.h>
 #endif
 
@@ -145,7 +145,8 @@ void applyRotation(std::vector<double>& shape, const std::vector<double>& rotMat
 void applyRotationBLAS(std::vector<double>& shape, const std::vector<double>& rotMatrix)
 {
     EnterCriticalSection(&cubeDraw[0]);
-#ifdef _M_ARM64 && _USE_ARMPL
+//#ifdef _M_ARM64 && _USE_ARMPL
+#if defined(_M_ARM64) && defined(_USE_ARMPL_DEFINES)
     // Call the BLAS matrix mult for doubles. 
     // Multiplies each of the 3d points in shape 
     // list with rotation matrix, and applies scale
@@ -360,8 +361,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         // Parse the menu selections:
         switch (wmId)
         {
-#ifdef _M_ARM64 && _USE_ARMPL
-
+//#ifdef _M_ARM64 && _USE_ARMPL
+#if defined(_M_ARM64) && defined(_USE_ARMPL_DEFINES)
         case ID_OPTIONS_USE:
             useAPL = !useAPL;
 
