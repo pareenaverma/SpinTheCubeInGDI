@@ -6,9 +6,24 @@ The project involves creating a window application that renders a 3D cube and ap
 
 The key components of the project include:
 
-* Window Creation: The application creates a window using the Windows API, which serves as the canvas for rendering the 3D cube.
-* 3D Cube Definition: The cube is defined by its vertices in a 3D space. These vertices are stored in a data structure and are used to draw the cube.
-* Rotation Matrix: A rotation matrix is used to apply rotation transformations to the cube's vertices. This matrix is updated continuously to create the spinning effect.
-* Rendering Loop: The application runs a loop that continuously updates the rotation angle and redraws the cube with the new rotated vertices. This loop ensures that the cube appears to be spinning smoothly.
-* GDI Drawing: The Graphics Device Interface (GDI) functions are used to draw the cube on the window. This includes drawing lines between the vertices to form the edges of the cube.
-The project is written in C++ and utilizes the Windows API for window management and GDI for rendering the graphics. The main file, SpinTheCubeInGDI.cpp, contains the core logic for creating the window, defining the cube, applying the rotation, and rendering the cube on the screen.
+* 3D Cube Representation: The code defines the vertices (corners) of a cube in 3D space. These vertices are stored in a data structure.
+
+* Projection: It then transforms these 3D coordinates into 2D screen coordinates. This involves:
+  * Perspective Projection: The code simulates perspective, making objects appear smaller as they get farther away.
+  * Screen Transformation: It maps the 3D world coordinates onto the 2D window space.
+
+* Rotation: The cube is animated by applying rotation transformations to its vertices. The code likely uses:
+  * Rotation Matrices: Standard matrix operations are used to rotate the cube around its X, Y, and Z axes.
+  * Incremental Rotation: The rotation angles are changed slightly in each frame of the animation to create a smooth spinning effect.
+
+* GDI Rendering: The core rendering is done using GDI functions like:
+  * GetDC(): To obtain a device context to draw on.
+  * MoveToEx() and LineTo(): To draw the edges of the cube as lines on the screen.
+  * ReleaseDC(): To release the device context after drawing.
+
+* Animation Loop: The project includes a simple animation loop that:
+  * Clears the screen.
+  * Updates the cube's rotation angles.
+  * Transforms the cube's vertices into 2D coordinates.
+  * Draws the projected lines of the cube on the screen.
+  * Repeats this process in a loop to create the animation.
