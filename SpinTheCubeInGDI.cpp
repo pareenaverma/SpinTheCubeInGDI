@@ -425,7 +425,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int calcPerSecond = static_cast<int>((Calculations * 1000.0) / (diff * 1.0));
             Calculations = 0;
             std::wstringstream stream;
-            stream << L"Transforms per second: " << std::fixed << std::setprecision(2) << calcPerSecond / 1000.0 << L"k (" << useAPL << ")";// BLAS: " << c1 << " and C : " << c2;
+//            stream << L"Transforms per second: " << std::fixed << std::setprecision(2) << calcPerSecond / 1000.0 << L"k (" << useAPL << ")";// BLAS: " << c1 << " and C : " << c2;
+            stream << L"Transforms per second: " << std::fixed << std::setprecision(2) << calcPerSecond / 1000.0 << L"k";// BLAS: " << c1 << " and C : " << c2;
             wsprintf(rateMsg, stream.str().c_str());
 
         }
