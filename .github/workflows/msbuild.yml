@@ -48,32 +48,35 @@ jobs:
         mkdir -p ${{ runner.temp }}/dependencies
         
     - name: Download ARM Performance Libraries (APL)
-      run: |
+      env:
         DOWNLOADS_DIR: ${{ runner.temp }}/downloads
         DEPENDENCIES_DIR: ${{ runner.temp }}/dependencies
+      run: |
         echo "Downloads directory is ${{DOWNLOADS_DIR}}"
         curl -L -o "${{DOWNLOADS_DIR}}/arm-performance-libraries.msi" ${{env.DOWNLOAD_URL}}
 
     - name: Install ARM Performance Libraries (APL)
-      run: |
+      env: 
         DOWNLOADS_DIR: ${{ runner.temp }}/downloads
         DEPENDENCIES_DIR: ${{ runner.temp }}/dependencies
+      run: |
         msiexec /i "${{ env.DOWNLOADS_DIR }}/arm-performance-libraries.msi" /qn /norestart ACCEPT_EULA=1 INSTALLFOLDER="${{ env.DEPENDENCIES_DIR }}"
 
     - name: Check installation success
       shell: cmd
       run: |
-          DOWNLOADS_DIR: ${{ runner.temp }}/downloads
-          DEPENDENCIES_DIR: ${{ runner.temp }}/dependencies
           if %errorlevel% neq 0 (
             echo "Failed to install ARM Performance Libraries (APL) components. (exitcode = %errorlevel%)"
             exit /b 1
           )
-          ls ${{DOWNLOADS_DIR}}
-          ls ${{DEPENDENCIES_DIR}}
 
     - name: Add to environment
+      env:
+        DOWNLOADS_DIR: ${{ runner.temp }}/downloads
+        DEPENDENCIES_DIR: ${{ runner.temp }}/dependencies
       run: |
+        ls ${{ env.DOWNLOADS_DIR }}
+        ls ${{ env.DEPENDENCIES_DIR }}
         echo "ARMPL_DIR=${{ env.DEPENDENCIES_DIR }}/armpl_24.10" >> $GITHUB_ENV
         echo "${{ env.DEPENDENCIES_DIR }}/armpl_24.10/bin" >> $GITHUB_PATH
 
