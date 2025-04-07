@@ -38,6 +38,42 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: nuget restore ${{env.SOLUTION_FILE_PATH}}
 
+    - name: Set up environment variables
+      run: |
+        echo "DOWNLOADS_DIR=${{ runner.temp }}/downloads" >> $GITHUB_ENV
+        echo "DEPENDENCIES_DIR=${{ runner.temp }}/dependencies" >> $GITHUB_ENV
+        echo "GITHUB_ENV=${{ github.env }}" >> $GITHUB_ENV
+        echo "GITHUB_PATH=${{ github.path }}" >> $GITHUB_ENV
+
+    - name: Create directories
+      run: |
+        mkdir -p ${{ runner.temp }}/downloads
+        mkdir -p ${{ runner.temp }}/dependencies
+
+    - name: Set download URL for ARM Performance Libraries (APL)
+      run: echo "DOWNLOAD_URL=https://developer.arm.com/-/cdn-downloads/permalink/Arm-Performance-Libraries/Version_24.10/arm-performance-libraries_24.10_Windows.msi" >> $GITHUB_ENV
+
+    - name: Download ARM Performance Libraries (APL)
+      run: curl -L -o "${{ env.DOWNLOADS_DIR }}/arm-performance-libraries.msi" ${{ env.DOWNLOAD_URL }}
+
+    - name: Install ARM Performance Libraries (APL)
+      run: msiexec /i "${{ env.DOWNLOADS_DIR }}/arm-performance-libraries.msi" /qn /norestart ACCEPT_EULA=1 INSTALLFOLDER="${{ env.DEPENDENCIES_DIR }}"
+
+    - name: Check installation success
+      run: |
+        if (${{ env.ERRORLEVEL }} -ne 0) {
+          echo "Failed to install ARM Performance Libraries (APL) components. (exitcode = ${{ env.ERRORLEVEL }})"
+          exit 1
+        }
+
+    - name: Add to environment
+      run: |
+        echo "ARMPL_DIR=${{ env.DEPENDENCIES_DIR }}/armpl_24.10" >> $GITHUB_ENV
+        echo "${{ env.DEPENDENCIES_DIR }}/armpl_24.10/bin" >> $GITHUB_PATH
+
+    - name: Finish
+      run: echo "Dependency ARM Performance Libraries (APL) installation finished."
+
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
       # Add additional options to the MSBuild command line here (like platform or verbosity level).
