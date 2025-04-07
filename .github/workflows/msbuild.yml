@@ -53,7 +53,7 @@ jobs:
         DEPENDENCIES_DIR: ${{ runner.temp }}\dependencies
       run: |
         echo "Downloads directory is ${{env.DOWNLOADS_DIR}}"
-        curl -L -o "${{env.DOWNLOADS_DIR}}/arm-performance-libraries.msi" ${{env.DOWNLOAD_URL}}       
+        curl -L -o "${{env.DOWNLOADS_DIR}}\arm-performance-libraries.msi" ${{env.DOWNLOAD_URL}}       
         echo "Contents of Downloads directory:"
         dir "${{ env.DOWNLOADS_DIR }}"
 
@@ -62,7 +62,7 @@ jobs:
         DOWNLOADS_DIR: ${{ runner.temp }}\downloads
         DEPENDENCIES_DIR: ${{ runner.temp }}\dependencies
       run: |
-        msiexec /i "${{ env.DOWNLOADS_DIR }}/arm-performance-libraries.msi" /qn /norestart ACCEPT_EULA=1 INSTALLFOLDER="${{ env.DEPENDENCIES_DIR }}"      
+        msiexec /i "${{ env.DOWNLOADS_DIR }}\arm-performance-libraries.msi" /qn /norestart ACCEPT_EULA=1 INSTALLFOLDER="${{ env.DEPENDENCIES_DIR }}"      
         echo "Contents of dependencies directory:"
         dir "${{ env.DEPENDENCIES_DIR }}"
 
@@ -76,13 +76,13 @@ jobs:
 
     - name: Add to environment
       env:
-        DOWNLOADS_DIR: ${{ runner.temp }}/downloads
-        DEPENDENCIES_DIR: ${{ runner.temp }}/dependencies
+        DOWNLOADS_DIR: ${{ runner.temp }}\downloads
+        DEPENDENCIES_DIR: ${{ runner.temp }}\dependencies
       run: |
         ls ${{ env.DOWNLOADS_DIR }}
         ls ${{ env.DEPENDENCIES_DIR }}
-        echo "ARMPL_DIR=${{ env.DEPENDENCIES_DIR }}/armpl_24.10" >> $GITHUB_ENV
-        echo "${{ env.DEPENDENCIES_DIR }}/armpl_24.10/bin" >> $GITHUB_PATH
+        echo "ARMPL_DIR=${{ env.DEPENDENCIES_DIR }}\armpl_24.10" >> $GITHUB_ENV
+        echo "${{ env.DEPENDENCIES_DIR }}\armpl_24.10\bin" >> $GITHUB_PATH
 
     - name: Finish
       run: echo "Dependency ARM Performance Libraries (APL) installation finished."
