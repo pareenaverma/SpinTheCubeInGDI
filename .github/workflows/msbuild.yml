@@ -53,16 +53,18 @@ jobs:
         DEPENDENCIES_DIR: ${{ runner.temp }}\dependencies
       run: |
         echo "Downloads directory is ${{env.DOWNLOADS_DIR}}"
-        curl -L -o "${{env.DOWNLOADS_DIR}}/arm-performance-libraries.msi" ${{env.DOWNLOAD_URL}}
-        dir $${env.DOWNLOADS_DIR}}
+        curl -L -o "${{env.DOWNLOADS_DIR}}/arm-performance-libraries.msi" ${{env.DOWNLOAD_URL}}       
+        echo "Contents of Downloads directory:"
+        dir "${{ env.DOWNLOADS_DIR }}"
 
     - name: Install ARM Performance Libraries (APL)
       env: 
         DOWNLOADS_DIR: ${{ runner.temp }}\downloads
         DEPENDENCIES_DIR: ${{ runner.temp }}\dependencies
       run: |
-        msiexec /i "${{ env.DOWNLOADS_DIR }}/arm-performance-libraries.msi" /qn /norestart ACCEPT_EULA=1 INSTALLFOLDER="${{ env.DEPENDENCIES_DIR }}"
-        dir $${env.DEPENDENCIES_DIR}}
+        msiexec /i "${{ env.DOWNLOADS_DIR }}/arm-performance-libraries.msi" /qn /norestart ACCEPT_EULA=1 INSTALLFOLDER="${{ env.DEPENDENCIES_DIR }}"      
+        echo "Contents of dependencies directory:"
+        dir "${{ env.DEPENDENCIES_DIR }}"
 
     - name: Check installation success
       shell: cmd
