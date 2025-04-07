@@ -20,9 +20,7 @@ env:
   # You can convert this to a build matrix if you need coverage of multiple configuration types.
   # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
   BUILD_CONFIGURATION: Debug
-
-  DOWNLOADS_DIR: ${{runner.temp}}/downloads" 
-  DEPENDENCIES_DIR: ${{runner.temp}}/dependencies" 
+  
   GITHUB_ENV: ${{github.env}}" 
   GITHUB_PATH: ${{github.path}}" 
 
@@ -46,6 +44,11 @@ jobs:
     - name: Restore NuGet packages
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: nuget restore ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Set up environment variables
+      run: |
+        echo "DOWNLOADS_DIR=${{ runner.temp }}/downloads" >> $GITHUB_ENV
+        echo "DEPENDENCIES_DIR=${{ runner.temp }}/dependencies" >> $GITHUB_ENV
         
     - name: Create directories
       run: |
