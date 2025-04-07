@@ -20,9 +20,6 @@ env:
   # You can convert this to a build matrix if you need coverage of multiple configuration types.
   # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
   BUILD_CONFIGURATION: Debug
-  
-  GITHUB_ENV: ${{github.env}}" 
-  GITHUB_PATH: ${{github.path}}" 
 
   #Set download URL for ARM Performance Libraries (APL)
   DOWNLOAD_URL: "https://developer.arm.com/-/cdn-downloads/permalink/Arm-Performance-Libraries/Version_24.10/arm-performance-libraries_24.10_Windows.msi" 
@@ -56,17 +53,20 @@ jobs:
         mkdir -p ${{ runner.temp }}/dependencies
         
     - name: Download ARM Performance Libraries (APL)
-      run: curl -L -o "${{env.DOWNLOADS_DIR}}/arm-performance-libraries.msi" ${{env.DOWNLOAD_URL}}
+      run: |
+        echo "Downloads directory is $DOWNLOADS_DIR"
+        curl -L -o "${{env.DOWNLOADS_DIR}}/arm-performance-libraries.msi" ${{env.DOWNLOAD_URL}}
 
     - name: Install ARM Performance Libraries (APL)
       run: msiexec /i "${{ env.DOWNLOADS_DIR }}/arm-performance-libraries.msi" /qn /norestart ACCEPT_EULA=1 INSTALLFOLDER="${{ env.DEPENDENCIES_DIR }}"
 
     - name: Check installation success
+      shell: cmd
       run: |
-        if (${{ env.ERRORLEVEL }} -ne 0) {
-          echo "Failed to install ARM Performance Libraries (APL) components. (exitcode = ${{ env.ERRORLEVEL }})"
-          exit 1
-        }
+          if %errorlevel% neq 0 (
+            echo "Failed to install ARM Performance Libraries (APL) components. (exitcode = %errorlevel%)"
+            exit /b 1
+          )
 
     - name: Add to environment
       run: |
