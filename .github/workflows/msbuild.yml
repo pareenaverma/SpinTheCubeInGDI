@@ -52,8 +52,8 @@ jobs:
         DOWNLOADS_DIR: ${{ runner.temp }}/downloads
         DEPENDENCIES_DIR: ${{ runner.temp }}/dependencies
       run: |
-        echo "Downloads directory is ${{DOWNLOADS_DIR}}"
-        curl -L -o "${{DOWNLOADS_DIR}}/arm-performance-libraries.msi" ${{env.DOWNLOAD_URL}}
+        echo "Downloads directory is ${{env.DOWNLOADS_DIR}}"
+        curl -L -o "${{env.DOWNLOADS_DIR}}/arm-performance-libraries.msi" ${{env.DOWNLOAD_URL}}
 
     - name: Install ARM Performance Libraries (APL)
       env: 
