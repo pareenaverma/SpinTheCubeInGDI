@@ -30,7 +30,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: native-windows-large-runner
 
     steps:
     - uses: actions/checkout@v4
