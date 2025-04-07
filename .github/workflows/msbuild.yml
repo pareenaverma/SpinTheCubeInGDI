@@ -54,7 +54,10 @@ jobs:
       run: echo "DOWNLOAD_URL=https://developer.arm.com/-/cdn-downloads/permalink/Arm-Performance-Libraries/Version_24.10/arm-performance-libraries_24.10_Windows.msi" >> $GITHUB_ENV
 
     - name: Download ARM Performance Libraries (APL)
-      run: curl -L -o "${{ env.DOWNLOADS_DIR }}/arm-performance-libraries.msi" ${{ env.DOWNLOAD_URL }}
+      run: |
+        echo ${{ env.DOWNLOADS_DIR }}
+        echo ${{ env.DOWNLOAD_URL }}
+        curl -L -o "${{ env.DOWNLOADS_DIR }}/arm-performance-libraries.msi" ${{ env.DOWNLOAD_URL }}
 
     - name: Install ARM Performance Libraries (APL)
       run: msiexec /i "${{ env.DOWNLOADS_DIR }}/arm-performance-libraries.msi" /qn /norestart ACCEPT_EULA=1 INSTALLFOLDER="${{ env.DEPENDENCIES_DIR }}"
