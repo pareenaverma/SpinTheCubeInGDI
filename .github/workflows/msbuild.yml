@@ -21,10 +21,10 @@ env:
   # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
   BUILD_CONFIGURATION: Debug
 
-  DOWNLOADS_DIR: ${{ runner.temp }}/downloads" 
-  DEPENDENCIES_DIR: ${{ runner.temp }}/dependencies" 
-  GITHUB_ENV: ${{ github.env }}" 
-  GITHUB_PATH: ${{ github.path }}" 
+  DOWNLOADS_DIR: ${{runner.temp}}/downloads" 
+  DEPENDENCIES_DIR: ${{runner.temp}}/dependencies" 
+  GITHUB_ENV: ${{github.env}}" 
+  GITHUB_PATH: ${{github.path}}" 
 
   #Set download URL for ARM Performance Libraries (APL)
   DOWNLOAD_URL: "https://developer.arm.com/-/cdn-downloads/permalink/Arm-Performance-Libraries/Version_24.10/arm-performance-libraries_24.10_Windows.msi" 
@@ -50,13 +50,13 @@ jobs:
     - name: Create directories
       run: |
         mkdir -p ${{ runner.temp }}/downloads
-        mkdir -p ${{ runner.temp }}/dependencie
+        mkdir -p ${{ runner.temp }}/dependencies
         
     - name: Download ARM Performance Libraries (APL)
       run: |
-        echo ${{ env.DOWNLOADS_DIR }}
-        echo ${{ env.DOWNLOAD_URL }}
-        curl -L -o "${{ env.DOWNLOADS_DIR }}/arm-performance-libraries.msi" ${{ env.DOWNLOAD_URL }}
+        echo ${{env.DOWNLOADS_DIR}}
+        echo ${{env.DOWNLOAD_URL}}
+        curl -L -o "${{env.DOWNLOADS_DIR}}/arm-performance-libraries.msi" ${{env.DOWNLOAD_URL}}
 
     - name: Install ARM Performance Libraries (APL)
       run: msiexec /i "${{ env.DOWNLOADS_DIR }}/arm-performance-libraries.msi" /qn /norestart ACCEPT_EULA=1 INSTALLFOLDER="${{ env.DEPENDENCIES_DIR }}"
