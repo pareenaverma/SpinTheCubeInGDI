@@ -42,11 +42,6 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: nuget restore ${{env.SOLUTION_FILE_PATH}}
 
-    - name: Set up environment variables
-      run: |
-        echo "DOWNLOADS_DIR=${{ runner.temp }}/downloads" >> $GITHUB_ENV
-        echo "DEPENDENCIES_DIR=${{ runner.temp }}/dependencies" >> $GITHUB_ENV
-        
     - name: Create directories
       run: |
         mkdir -p ${{ runner.temp }}/downloads
