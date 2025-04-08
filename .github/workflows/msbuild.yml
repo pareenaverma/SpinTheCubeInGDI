@@ -42,15 +42,13 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: nuget restore ${{env.SOLUTION_FILE_PATH}}
 
-    - name: Create directories
+    - name: Create download directory
       run: |
         mkdir -p ${{ runner.temp }}/downloads
-        mkdir -p ${{ runner.temp }}/dependencies
         
     - name: Download ARM Performance Libraries (APL)
       env:
         DOWNLOADS_DIR: ${{ runner.temp }}\downloads
-        DEPENDENCIES_DIR: ${{ runner.temp }}\dependencies
       run: |
         echo "Downloads directory is ${{env.DOWNLOADS_DIR}}"
         curl -L -o "${{env.DOWNLOADS_DIR}}\arm-performance-libraries.msi" ${{env.DOWNLOAD_URL}}       
@@ -60,7 +58,6 @@ jobs:
     - name: Install ARM Performance Libraries (APL)
       env: 
         DOWNLOADS_DIR: ${{ runner.temp }}\downloads
-        DEPENDENCIES_DIR: ${{ runner.temp }}\dependencies
       run: |
         start -wait msiexec.exe -ArgumentList "/i ${{ env.DOWNLOADS_DIR }}\arm-performance-libraries.msi /quiet ACCEPT_EULA=1 /l test.log"
         echo "Log file"
@@ -75,19 +72,7 @@ jobs:
             echo "Failed to install ARM Performance Libraries (APL) components. (exitcode = %errorlevel%)"
             exit /b 1
           )
-
-    - name: Add to environment
-      env:
-        DOWNLOADS_DIR: ${{ runner.temp }}\downloads
-        DEPENDENCIES_DIR: ${{ runner.temp }}\dependencies
-      run: |
-        ls ${{ env.DOWNLOADS_DIR }}
-        ls ${{ env.DEPENDENCIES_DIR }}
-        echo "ARMPL_DIR=${{ env.DEPENDENCIES_DIR }}\armpl_24.10" >> $GITHUB_ENV
-        echo "${{ env.DEPENDENCIES_DIR }}\armpl_24.10\bin" >> $GITHUB_PATH
-
-    - name: Finish
-      run: echo "Dependency ARM Performance Libraries (APL) installation finished."
+          echo "Dependency ARM Performance Libraries (APL) installation finished."
 
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
