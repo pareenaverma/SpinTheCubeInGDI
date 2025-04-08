@@ -62,8 +62,12 @@ jobs:
         DOWNLOADS_DIR: ${{ runner.temp }}\downloads
         DEPENDENCIES_DIR: ${{ runner.temp }}\dependencies
       run: |
-        msiexec /i "${{ env.DOWNLOADS_DIR }}\arm-performance-libraries.msi" /qn /norestart ACCEPT_EULA=1 INSTALLFOLDER="${{ env.DEPENDENCIES_DIR }}"      
+        echo "start -wait msiexec.exe -ArgumentList "/i ${{ env.DOWNLOADS_DIR }}\arm-performance-libraries.msi /quiet ACCEPT_EULA=1 /l test.log"" > powershell_installer.ps1
+        powershell -File powershell_installer.ps1
+        echo "Log file"
+        more test.log
         echo "Contents of dependencies directory:"
+        dir
         dir "${{ env.DEPENDENCIES_DIR }}"
 
     - name: Check installation success
