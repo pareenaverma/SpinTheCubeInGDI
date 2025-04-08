@@ -65,9 +65,8 @@ jobs:
         start -wait msiexec.exe -ArgumentList "/i ${{ env.DOWNLOADS_DIR }}\arm-performance-libraries.msi /quiet ACCEPT_EULA=1 /l test.log"
         echo "Log file"
         more test.log
-        echo "Contents of dependencies directory:"
-        dir
-        dir "${{ env.DEPENDENCIES_DIR }}"
+        echo "Contents of ArmPL directory:"
+        dir C:\Program Files\Arm Performance Libraries\armpl_24.10
 
     - name: Check installation success
       shell: cmd
