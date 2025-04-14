@@ -10,7 +10,7 @@
 #include "Resource.h"
 
 #undef small
-//#define _USE_ARMPL_DEFINES
+#define _USE_ARMPL_DEFINES
 
 #if defined(_M_ARM64) && defined(_USE_ARMPL_DEFINES)
 #include <armpl.h>
