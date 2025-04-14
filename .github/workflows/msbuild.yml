@@ -82,7 +82,7 @@ jobs:
       run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} ${{env.SOLUTION_FILE_PATH}}
 
     - name: Upload build artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: built-executable
         path: ${{env.GITHUB_WORKSPACE}}\SpinTheCubeInGDI\SpinTheCubeInGDI\SpinTheCubeInGDI.exe
