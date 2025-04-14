@@ -85,4 +85,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: built-executable
-        path: ${{env.GITHUB_WORKSPACE}}\SpinTheCubeInGDI\SpinTheCubeInGDI\SpinTheCubeInGDI.exe
+        path: C:\a\SpinTheCubeInGDI\SpinTheCubeInGDI\SpinTheCubeInGDI.exe
