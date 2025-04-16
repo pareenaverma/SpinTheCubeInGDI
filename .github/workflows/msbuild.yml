@@ -6,6 +6,7 @@
 name: MSBuild
 
 on:
+  workflow_dispatch  :
   push:
     branches: [ "main" ]
   pull_request:
@@ -18,14 +19,18 @@ env:
   # Configuration type to build.
   # You can convert this to a build matrix if you need coverage of multiple configuration types.
   # https://docs.github.com/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-  BUILD_CONFIGURATION: Release
+  BUILD_CONFIGURATION: Debug
+
+  #Set download URL for ARM Performance Libraries (APL)
+  DOWNLOAD_URL: "https://developer.arm.com/-/cdn-downloads/permalink/Arm-Performance-Libraries/Version_24.10/arm-performance-libraries_24.10_Windows.msi" 
+
 
 permissions:
   contents: read
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-11-arm
 
     steps:
     - uses: actions/checkout@v4
@@ -37,8 +42,47 @@ jobs:
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: nuget restore ${{env.SOLUTION_FILE_PATH}}
 
+    - name: Create download directory
+      run: |
+        mkdir -p ${{ runner.temp }}/downloads
+        python3 --version
+        
+    - name: Download ARM Performance Libraries (APL)
+      env:
+        DOWNLOADS_DIR: ${{ runner.temp }}\downloads
+      run: |
+        echo "Downloads directory is ${{env.DOWNLOADS_DIR}}"
+        curl -L -o "${{env.DOWNLOADS_DIR}}\arm-performance-libraries.msi" ${{env.DOWNLOAD_URL}}       
+        echo "Contents of Downloads directory:"
+        dir "${{ env.DOWNLOADS_DIR }}"
+
+    - name: Install ARM Performance Libraries (APL)
+      env: 
+        DOWNLOADS_DIR: ${{ runner.temp }}\downloads
+      run: |
+        start -wait msiexec.exe -ArgumentList "/i ${{ env.DOWNLOADS_DIR }}\arm-performance-libraries.msi /quiet ACCEPT_EULA=1 /l test.log"
+        echo "Log file"
+        more test.log
+        echo "Contents of ArmPL directory:"
+        dir "C:\Program Files\Arm Performance Libraries\armpl_24.10"
+
+    - name: Check installation success
+      shell: cmd
+      run: |
+          if %errorlevel% neq 0 (
+            echo "Failed to install ARM Performance Libraries (APL) components. (exitcode = %errorlevel%)"
+            exit /b 1
+          )
+          echo "Dependency ARM Performance Libraries (APL) installation finished."
+
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
       # Add additional options to the MSBuild command line here (like platform or verbosity level).
       # See https://docs.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference
-      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} ${{env.SOLUTION_FILE_PATH}}
+      run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=ARM64 ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: built-executable
+        path: C:\a\SpinTheCubeInGDI\SpinTheCubeInGDI\ARM64\Debug\SpinTheCubeInGDI.exe
