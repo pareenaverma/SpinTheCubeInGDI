@@ -64,7 +64,7 @@ jobs:
         echo "Log file"
         more test.log
         echo "Contents of ArmPL directory:"
-        dir "C:\Program Files\Arm Performance Libraries\armpl_24.10"
+        dir "C:\Program Files\Arm Performance Libraries\armpl_25.04"
 
     - name: Check installation success
       shell: cmd
