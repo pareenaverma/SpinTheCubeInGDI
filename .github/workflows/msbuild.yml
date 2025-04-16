@@ -38,7 +38,7 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.0.2
 
-    - name: Run lscpu
+    - name: cpu info
       run: wmic cpu get name,numberofcores,numberoflogicalprocessors,maxclockspeed
 
     - name: Restore NuGet packages
