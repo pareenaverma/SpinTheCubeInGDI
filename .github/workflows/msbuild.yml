@@ -39,7 +39,10 @@ jobs:
       uses: microsoft/setup-msbuild@v1.0.2
 
     - name: cpu info
-      run: wmic cpu get name,numberofcores,numberoflogicalprocessors,maxclockspeed
+      run: |
+        wmic cpu get name,numberofcores,numberoflogicalprocessors,maxclockspeed
+        cmake --version
+        dir D:\
 
     - name: Restore NuGet packages
       working-directory: ${{env.GITHUB_WORKSPACE}}
